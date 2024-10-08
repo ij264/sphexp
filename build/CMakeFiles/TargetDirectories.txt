@@ -1,4 +1,0 @@
-/home/david/fortran/sphexp/build/CMakeFiles/SphExpModules.dir
-/home/david/fortran/sphexp/build/CMakeFiles/sphexp_inv.dir
-/home/david/fortran/sphexp/build/CMakeFiles/edit_cache.dir
-/home/david/fortran/sphexp/build/CMakeFiles/rebuild_cache.dir

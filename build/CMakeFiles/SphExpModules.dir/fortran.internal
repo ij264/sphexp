@@ -1,7 +1,0 @@
-# The fortran modules provided by this target.
-provides
- module_function.mod
- module_sphexp.mod
- module_util.mod
- nrtype.mod
- nrutil.mod
