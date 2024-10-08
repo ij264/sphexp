@@ -1,0 +1,2 @@
+/usr/bin/ar qc lib/libSphExpModules.a CMakeFiles/SphExpModules.dir/src/module_function.f90.o CMakeFiles/SphExpModules.dir/src/module_util.f90.o CMakeFiles/SphExpModules.dir/src/nrtype.f90.o CMakeFiles/SphExpModules.dir/src/nrutil.f90.o CMakeFiles/SphExpModules.dir/src/module_sphexp.f90.o
+/usr/bin/ranlib lib/libSphExpModules.a

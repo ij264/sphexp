@@ -1,34 +1,11 @@
 module module_sphexp
 
   use nrtype
-  use SHTOOLS
+  use module_function
   implicit none
 
 
-  !=============================================================!
-  !=============================================================!
-  !                variables for use with SHTOOLS               !
-  !=============================================================!
-  integer(i4b), parameter :: maxdeg_SH = 1000
-  integer(i4b), parameter :: maxgrid_SH = 2*(2*maxdeg_SH+1)
-  integer(i4b), save :: ilat_SH
-  integer(i4b), save :: ilon_SH
-  integer(i4b), save :: nlat_SH
-  integer(i4b), save :: nlon_SH  
-  integer(i4b), save :: lmax_SH
-  integer(i4b), save :: ncoef_SH
-  integer(i4b), save :: ncoef_real_SH
-  integer(i4b), save :: ndh_SH
-  real(dp), dimension(maxgrid_SH), save :: lat_SH
-  real(dp), dimension(maxgrid_SH), save :: lon_SH
-  real(dp), dimension(maxgrid_SH), save :: th_SH
-  real(dp), dimension(maxgrid_SH), save :: ph_SH
-  real(dp), dimension(maxgrid_SH,maxgrid_SH), save :: fgrid_SH
-  real(dp), dimension(2, maxdeg_SH+1, maxdeg_SH+1), save :: flm_SH
-  
-
-
-  !---------------------------------------!
+ !---------------------------------------!
   !   variables for the spherical mesh    !
   !---------------------------------------!  
   integer(i4b), parameter :: npw_sph = 3
@@ -83,191 +60,11 @@ module module_sphexp
   real(dp), dimension(ngll_sph), save :: hptmp_eta_sph
 
 
+  
+
+
 
 contains
-
-  !================================================================!
-  !================================================================!
-  !                     wrappers to use SHTOOLS                    !
-  !================================================================!
-  !================================================================!
-
-  
-  subroutine set_SHTOOLS(lmax)
-    use nrtype
-    implicit none
-    integer(i4b), intent(in) :: lmax
-    integer(i4b) :: ilat,ilon
-    real(dp) :: interval,lat,lon,th,ph,dlat,dlon
-    
-    lmax_SH = lmax
-    ncoef_SH = (lmax_SH+1)*(lmax_SH+2)/2    
-    ncoef_real_SH = (lmax_SH+1)*(lmax_SH+1)
-    ndh_SH = 2*(lmax_SH+1)
-    interval = 2*(lmax_SH+1)/180.0_dp
-    interval = 1.0/interval
-    nlat_SH = floor(180.0_dp/interval)+1
-    nlon_SH = 2*nlat_SH
-    dlat = 180.0_dp/(nlat_SH-1)
-    dlon = 360.0_dp/(nlon_SH-1)
-    
-    do ilat = 1,nlat_SH
-       lat = 90.0-(ilat-1)*dlat
-       th = (90.0_dp-lat)*deg2rad
-       lat_SH(ilat) = lat
-       th_SH(ilat) = th
-    end do
-
-    do ilon = 1,nlon_SH
-       lon = (ilon-1)*dlon
-       ph = lon*deg2rad
-       lon_SH(ilon) = lon
-       ph_SH(ilon) = ph
-    end do
-
-
-
-    return
-  end subroutine set_SHTOOLS
-
-
-  subroutine SHExpandDH_wrapper(flm,rfilt,lmax_calc)
-    use nrtype
-    use SHTOOLS
-    implicit none    
-    complex(dpc), dimension(:), allocatable, intent(inout) :: flm
-    real(dp), intent(in), optional :: rfilt
-    integer(i4b), intent(in), optional :: lmax_calc
-    integer(i4b) :: n,lmax2,i,m,l,ilm1,ilm2,lmax_use
-    real(dp) :: fac,rfilt_use
-
-    if(present(rfilt)) then
-       rfilt_use = rfilt
-    else
-       rfilt_use = 0.0_dp
-    end if
-
-    if(present(lmax_calc)) then
-       lmax_use = lmax_calc
-    else
-       lmax_use = lmax_SH
-    end if 
-
-    if(allocated(flm)) then
-       if(size(flm,1) /= ncoef_SH) then
-          deallocate(flm)
-          allocate(flm(ncoef_SH))
-       end if
-    else
-       allocate(flm(ncoef_SH))
-    end if
-
-    n = nlat_SH-1 
-    call SHExpandDH(fgrid_SH,n,flm_SH,lmax2,lmax_calc=lmax_use,sampling=2,norm = 4)
-
-      
-    ! transform to complex coefficients
-    i = 0
-    do l = 0,lmax_SH
-       do m = 0,l
-          i = i+1
-          if(m == 0) then
-             flm(i) =  flm_SH(1,l+1,m+1)
-          else
-             flm(i) = (flm_SH(1,l+1,m+1)-ii*flm_SH(2,l+1,m+1))/sqrt2
-          end if
-       end do
-    end do
-    
-    
-    if(rfilt_use /= 0.0_dp) then
-       ilm2 = 0
-       do l = 0,lmax_SH
-          ilm1 = ilm2+1
-          ilm2 = ilm1+l
-          fac = rfilt_use*twopi_d*(l+1)/(lmax_SH+0.5_dp)
-          fac = exp(-fac)
-          flm(ilm1:ilm2) = fac*flm(ilm1:ilm2)
-       end do
-    end if
-
-
-    return
-  end subroutine SHExpandDH_wrapper
-
-
-  subroutine set_flm_SH(flm,lmax_calc)
-    use nrtype
-    implicit none
-    complex(dpc), dimension(:), intent(in) :: flm
-    integer(i4b), intent(in), optional :: lmax_calc
-    integer(i4b) :: i,l,m,lmax_use
-    
-    if(present(lmax_calc)) then
-       lmax_use = min(lmax_calc,lmax_SH)
-    else
-       lmax_use = lmax_SH
-    end if
-
-
-    ! initialize the coefficients
-    flm_SH = 0.0_dp
-
-    i = 0
-    do l = 0,lmax_use
-       do m = 0,l
-          i = i+1
-          if(m == 0) then
-             flm_SH(1,l+1,m+1) = flm(i)
-          else
-             flm_SH(1,l+1,m+1) =  sqrt2*real(flm(i))
-             flm_SH(2,l+1,m+1) = -sqrt2*aimag(flm(i))
-          end if
-       end do
-    end do
-
-
-    
-
-    return
-  end subroutine set_flm_SH
-
-
-  subroutine MakeGridDH_wrapper(fgrid,lmax_calc)
-    use nrtype
-    use SHTOOLS
-    implicit none
-    real(dp), dimension(:,:), allocatable, intent(inout) :: fgrid
-    integer(i4b), intent(in), optional :: lmax_calc
-    integer(i4b) :: lmax_use
-
-
-    if(present(lmax_calc)) then
-       lmax_use = min(lmax_calc,lmax_SH)
-    else
-       lmax_use = lmax_SH
-    end if
-
-
-    if(allocated(fgrid)) then
-       if(size(fgrid,1) /= ndh_SH .and.  & 
-          size(fgrid,2) /= 2*ndh_SH) then
-          deallocate(fgrid)
-          allocate(fgrid(ndh_SH,2*ndh_SH))
-       end if
-    else
-       allocate(fgrid(ndh_SH,2*ndh_SH))
-    end if
-    
-    call MakeGridDH(fgrid,ndh_SH,flm_SH,lmax_SH,lmax_calc=lmax_use,sampling=2,norm=4)
-
-
-    
-    return
-  end subroutine MakeGridDH_wrapper
-
-
-
 
 
 
@@ -278,7 +75,7 @@ contains
   !================================================================!
 
 
-  subroutine real_to_complex_SH(lmax,flm_r,flm_c)
+ subroutine real_to_complex_SH(lmax,flm_r,flm_c)
     use nrtype
     implicit none
     integer(i4b), intent(in) :: lmax
@@ -870,192 +667,14 @@ contains
   end subroutine sph_mesh_finder
 
 
-
   !========================================================================!
   !========================================================================!
   !           routines for fitting spherical harmonics to data             !
   !========================================================================!
   !========================================================================!
 
-  
-  subroutine svd_fit_SH(ndata,lmax,lata,lona,funa,sigmaa,tol,flm,chi)
-    use nrtype
-    implicit none
-    integer(i4b), intent(in) :: ndata
-    integer(i4b), intent(in) :: lmax
-    real(dp), dimension(ndata), intent(in) :: lata
-    real(dp), dimension(ndata), intent(in) :: lona
-    real(dp), dimension(ndata), intent(in) :: funa
-    real(dp), dimension(ndata), intent(in) :: sigmaa
-    real(dp), intent(in) :: tol
-    real(dp), dimension((lmax+1)*(lmax+1)), intent(out) :: flm
-    real(dp), intent(out) :: chi
-
-    integer(i4b) :: lwork,ncoef,info,nsv,isv,idata
-
-    real(dp) :: err
-    real(dp), dimension(ndata,(lmax+1)*(lmax+1)) :: a
-    real(dp), dimension(ndata,(lmax+1)*(lmax+1)) :: atmp
-    real(dp), dimension(ndata,ndata) :: u
-    real(dp), dimension((lmax+1)*(lmax+1),(lmax+1)*(lmax+1)) :: vt
-    real(dp), dimension(ndata) :: b
-    real(dp), dimension(:), allocatable :: s
-    real(dp), dimension(:), allocatable :: work
-    
-
-    ! assemble the A matrix for the system
-    ncoef = (lmax+1)*(lmax+1)
-    call build_ylm_matrix_SH(0,lmax,ndata,lata,lona,a)
-    atmp = a
-
-    ! perform the SVD of A
-    lwork = max(1,3*min(ndata,ncoef)+max(ndata,ncoef),5*min(ndata,ncoef))
-    allocate(work(lwork))
-    nsv = min(ndata,ncoef)
-    allocate(s(nsv))
-    call dgesvd('A','A',ndata,ncoef,a,ndata,s,u,ndata,vt,ncoef,work,lwork,info)
-    
-    ! compute the SVD-based solution
-    b = matmul(transpose(u),funa)
-    do isv = 1,nsv
-       if(s(isv)/s(1) > tol) then
-          b(isv) = b(isv)/s(isv)
-       else
-          b(isv) = 0.0_dp
-       end if
-    end do
-    if(nsv+1 > ndata) then
-       b(nsv+1:ndata) = 0.0_dp
-    end if
-    flm = matmul(transpose(vt),b(1:ncoef))
-    
 
 
-    ! compute chi-squared for the solution
-    chi = 0.0_dp
-    do idata = 1,ndata     
-       err = dot_product(atmp(idata,:),flm(:))
-       err = err-funa(idata)
-       chi = chi + err**2/sigmaa(idata)**2
-    end do
-    chi = chi/ndata
-
-
-
-    
-    
-    return
-  end subroutine svd_fit_SH
-
-
-  subroutine backus_gilbert_estaimte_SH(ndata,lmin,lmax,lata,lona,funa,sigmaa,lambdaa,nu,lout,flm,chi,var)
-    use nrtype
-    implicit none
-    integer(i4b), intent(in) :: ndata
-    integer(i4b), intent(in) :: lmin
-    integer(i4b), intent(in) :: lmax
-    real(dp), dimension(ndata), intent(in) :: lata
-    real(dp), dimension(ndata), intent(in) :: lona
-    real(dp), dimension(ndata), intent(in) :: funa
-    real(dp), dimension(ndata), intent(in) :: sigmaa
-    real(dp), dimension(ndata), intent(in) :: lambdaa
-    real(dp), intent(in) :: nu
-    integer(i4b), intent(in) :: lout
-    real(dp), dimension((lout+1)*(lout+1)), intent(out) :: flm
-    real(dp), dimension((lout+1)*(lout+1)), intent(out) :: chi
-    real(dp), dimension((lout+1)*(lout+1)), intent(out) :: var
-    
-    integer(i4b) :: ncoef,idata,icoef,ilm1,ilm2,im,l,info,ncoef_out, & 
-                    ncoef_max,ncoef_min
-    integer(i4b), dimension(:), allocatable :: ipiv
-
-    real(dp) :: err
-    real(dp), dimension(:,:), allocatable :: a
-    real(dp), dimension(:,:), allocatable :: at
-    real(dp), dimension(:,:), allocatable :: aat
-    real(dp), dimension(:,:), allocatable :: b
-    real(dp), dimension(:), allocatable :: flm_tmp1
-    real(dp), dimension(:), allocatable :: flm_tmp2
-    real(dp), dimension(:), allocatable :: btmp
-
-
-    if(lout > lmax) stop
-    
-    ! assemble the A matrix for the system
-    print *, 'building system matrix'
-    ncoef_max = (lmax+1)*(lmax+1)
-    ncoef_min = lmin*lmin
-    ncoef_out = (lout+1)*(lout+1)
-    ncoef = ncoef_max - ncoef_min
-    ncoef_out = ncoef_out - ncoef_min
-    allocate(a(ndata,ncoef))
-    call build_ylm_matrix_SH_av(lmin,lmax,ndata,lata,lona,lambdaa,a)
-
-    ! form the transpose matrix, incorporating the 
-    ! inverse covariance 
-    allocate(at(ncoef,ndata))
-    at = transpose(a)
-
-    ! form A A^{T} incorporating regularization terms
-    print *, 'forming A A^{*}'
-    allocate(aat(ndata,ndata))
-    aat= matmul(a,at)
-
-    ! add the variance damping term
-    do idata = 1,ndata
-       aat(idata,idata) = aat(idata,idata) + nu*sigmaa(idata)**2
-    end do
-
-    ! form the right hand side for the system
-    allocate(flm_tmp1(ncoef))
-    allocate(flm_tmp2(ncoef))
-    allocate(b(ndata,ncoef_out))
-    allocate(btmp(ndata))
-    flm_tmp1 = 0.0_dp
-    do icoef = 1,ncoef_out
-       flm_tmp1(icoef) = 1.0_dp
-       btmp = matmul(a,flm_tmp1)
-       b(:,icoef) = btmp(:)
-       flm_tmp1(icoef) = 0.0_dp
-    end do
-
-    ! solve the normal equations    
-    print *, 'performing LU decomposition'
-    allocate(ipiv(ndata))
-    call dgetrf(ndata,ndata,aat,ndata,ipiv,info)
-    if(info /= 0) stop 'factorization didn''t work'
-    print *, 'performing back substitution'
-    call dgetrs('N',ndata,ncoef_out,aat,ndata,ipiv,b,ndata,info)
-    if(info /= 0) stop 'solution didn''t work'
-    
-
-    ! compute the misfit for each of the estimates
-    flm_tmp1(:) = 0.0_dp
-    chi(1:ncoef_min) = 0.0_dp
-    do icoef = 1,ncoef_out
-       flm_tmp1(icoef) = 1.0_dp
-       flm_tmp2(:) = matmul(at,b(:,icoef))       
-       chi(icoef+ncoef_min) = dot_product(flm_tmp2-flm_tmp1,flm_tmp2-flm_tmp1)
-       flm_tmp1(icoef) = 0.0_dp
-    end do
-
-    ! get the estimtes for each of the coefficients
-    flm(1:ncoef_min) = 0.0_dp
-    do icoef = 1,ncoef_out
-          flm(icoef+ncoef_min) = dot_product(b(:,icoef),funa)
-    end do
-
-    ! compute the variance of each estimate
-    var(1:ncoef_min) = 0.0_dp
-    do icoef = 1,ncoef_out
-          var(icoef+ncoef_min) = 0.0_dp
-          do idata = 1,ndata
-             var(icoef+ncoef_min) = var(icoef+ncoef_min) + sigmaa(idata)**2*b(idata,icoef)**2
-          end do
-    end do
-
-    return
-  end subroutine backus_gilbert_estaimte_SH
 
   subroutine least_squares_fit_SH(ndata,lmin,lmax,lata,lona,funa,sigmaa,nu1, & 
                                   nu2,flm,chi,resmat,covm,funa_syn)
@@ -1078,6 +697,7 @@ contains
 
     integer(i4b) :: ncoef,idata,icoef,ilm1,ilm2,im,l,info,ncoef_min,ncoef_max
     integer(i4b), dimension(:), allocatable :: ipiv
+   
 
     real(dp) :: err
     real(dp), dimension(:,:), allocatable :: a
@@ -1198,150 +818,6 @@ contains
   end subroutine least_squares_fit_SH
 
 
-
-  subroutine least_squares_fit_SH_av(ndata,lmin,lmax,lata,lona,funa,sigmaa, & 
-                                     lambdaa,nu1,nu2,flm,chi,resmat,covm,   & 
-                                     funa_syn)
-    use nrtype
-    implicit none
-    integer(i4b), intent(in) :: ndata
-    integer(i4b), intent(in) :: lmin
-    integer(i4b), intent(in) :: lmax
-    real(dp), dimension(ndata), intent(in) :: lata
-    real(dp), dimension(ndata), intent(in) :: lona
-    real(dp), dimension(ndata), intent(in) :: funa
-    real(dp), dimension(ndata), intent(in) :: sigmaa
-    real(dp), dimension(ndata), intent(in) :: lambdaa
-    real(dp), intent(in) :: nu1
-    real(dp), intent(in) :: nu2
-    real(dp), dimension(:), intent(out) :: flm
-    real(dp), intent(out) :: chi
-    real(dp), dimension(:,:), intent(out), optional :: resmat
-    real(dp), dimension(:,:), intent(out), optional :: covm
-    real(dp), dimension(:), intent(out), optional :: funa_syn
-
-    integer(i4b) :: ncoef,idata,icoef,ilm1,ilm2,im,l,info,ncoef_min,ncoef_max
-    integer(i4b), dimension(:), allocatable :: ipiv
-
-    real(dp) :: err
-    real(dp), dimension(:,:), allocatable :: a
-    real(dp), dimension(:,:), allocatable :: at
-    real(dp), dimension(:,:), allocatable :: ata
-    real(dp), dimension(:,:), allocatable :: b
-    real(dp), dimension(:,:), allocatable :: idtmp
-
-    
-    ! assemble the A matrix for the system
-    ncoef_min = (lmin)*(lmin)
-    ncoef_max = (lmax+1)*(lmax+1)
-    ncoef = ncoef_max-ncoef_min
-
-    allocate(a(ndata,ncoef))
-    allocate(at(ncoef,ndata))
-    allocate(ata(ncoef,ncoef))
-    allocate(b(ncoef,1))
-    allocate(ipiv(ncoef)) 
-    call build_ylm_matrix_SH_av(lmin,lmax,ndata,lata,lona,lambdaa,a)
-    
-    ! form the transpose matrix, incorporating the 
-    ! inverse covariance 
-    do idata = 1,ndata
-       at(:,idata) = a(idata,:)/sigmaa(idata)**2
-    end do
-
-    ! form A^{T}A incorporating regularization terms
-    ata = matmul(at,a)
-    if(present(resmat)) then
-       resmat = ata
-    end if
-
-    if(present(covm)) then
-       covm = ata
-    end if
-    
-
-    ! norm damping term
-    do icoef = 1,ncoef
-       ata(icoef,icoef) = ata(icoef,icoef) + nu1
-    end do
-
-
-    ! smoothing term
-    ilm2 = 0
-    do l = lmin,lmax
-       ilm1 = ilm2+1
-       ilm2 = ilm1+2*l     
-       do im = ilm1,ilm2
-          ata(im,im) = ata(im,im) + nu2*l*(l+1)
-       end do
-    end do
-
-    ! form the right hand side
-    b(:,1) = matmul(at,funa)
-
-
-
-    ! solve the normal equations
-    print *, 'computing least squares solution'
-    call dgetrf(ncoef,ncoef,ata,ncoef,ipiv,info)
-    if(info /= 0) stop 'factorization didn''t work'
-    call dgetrs('N',ncoef,1,ata,ncoef,ipiv,b,ncoef,info)
-    if(info /= 0) stop 'solution didn''t work'
-
-    
-    ! set the solution
-    flm(1:ncoef_min) = 0.0_dp
-    flm(ncoef_min+1:ncoef_max) = b(:,1)
-
-
-    ! compute chi-squared for the solution
-    chi = 0.0_dp
-    do idata = 1,ndata     
-       err = dot_product(a(idata,:),flm(ncoef_min+1:ncoef_max))
-       if(present(funa_syn)) then
-          funa_syn(idata) = err
-       end if
-       err = err-funa(idata)
-       chi = chi + err**2/sigmaa(idata)**2
-    end do    
-
-
-
-    ! compute resolution matrix if needed
-    if(present(resmat)) then
-
-       ! compute resolution matrix
-       call dgetrs('N',ncoef,ncoef,ata,ncoef,ipiv,resmat,ncoef,info)
-       if(info /= 0) stop 'solution didn''t work'
-
-    end if
-
-
-    ! compute the model covariance matrix if needed
-    if(present(covm)) then
-
-       print *, 'computing model covariance'
-       allocate(idtmp(ncoef,ncoef))
-       idtmp(1:ncoef,1:ncoef) = 0.0_dp
-       do icoef = 1,ncoef
-          idtmp(icoef,icoef) = 1.0_dp
-       end do
-
-       call dgetrs('T',ncoef,ncoef,ata,ncoef,ipiv,idtmp,ncoef,info)
-       if(info /= 0) stop 'solution didn''t work'
-       
-       covm = matmul(covm,idtmp)
-
-       call dgetrs('N',ncoef,ncoef,ata,ncoef,ipiv,covm,ncoef,info)
-       if(info /= 0) stop 'solution didn''t work'
-
-    end if
-
-    
-    return
-  end subroutine least_squares_fit_SH_av
-
-
   subroutine build_ylm_matrix_SH(lmin,lmax,ndata,lata,lona,a)
     use nrtype
     use module_function
@@ -1374,42 +850,6 @@ contains
 
 
 
-  subroutine build_ylm_matrix_SH_av(lmin,lmax,ndata,lata,lona,lambdaa,a)
-    use nrtype
-    use module_function
-    implicit none
-    integer(i4b), intent(in) :: lmin
-    integer(i4b), intent(in) :: lmax
-    integer(i4b), intent(in) :: ndata
-    real(dp), dimension(ndata), intent(in) :: lambdaa
-    real(dp), dimension(ndata), intent(in) :: lata
-    real(dp), dimension(ndata), intent(in) :: lona
-    real(dp), dimension(:,:), intent(out) :: a
-
-    integer(i4b) :: idata,ncoef_min,ncoef_max,l,m,ilm
-    real(dp) :: theta,phi
-    real(dp), dimension((lmax+1)*(lmax+1)) :: ylm
-    
-    ncoef_min = (lmin)*(lmin)
-    ncoef_max = (lmax+1)*(lmax+1)
-
-
-    do idata = 1,ndata
-       theta = (90.0_dp-lata(idata))*deg2rad
-       phi   = lona(idata)*deg2rad 
-       call ylm_real(lmax,theta,phi,ylm)
-       ilm = 0
-       do l = 0,lmax
-          do m = -l,l
-             ilm = ilm+1
-             ylm(ilm) = exp(-lambdaa(idata)**2*l*(l+1))*ylm(ilm)
-          end do
-       end do
-       a(idata,:) = ylm(ncoef_min+1:ncoef_max)
-    end do
-
-    return
-  end subroutine build_ylm_matrix_SH_av
 
 
 
@@ -1459,57 +899,6 @@ contains
   end subroutine read_data_SH
 
 
-
-
-
-  subroutine read_data_SH_av(io,data_file,ndata,lata,lona, & 
-       funa,sigmaa,lambdaa)
-    use nrtype
-    implicit none
-    integer(i4b), intent(in) :: io
-    character(len=*), intent(in) :: data_file
-    integer(i4b), intent(out) :: ndata    
-    real(dp), dimension(:), allocatable, intent(inout) :: lata
-    real(dp), dimension(:), allocatable, intent(inout) :: lona
-    real(dp), dimension(:), allocatable, intent(inout) :: funa
-    real(dp), dimension(:), allocatable, intent(inout) :: sigmaa
-    real(dp), dimension(:), allocatable, intent(inout) :: lambdaa
-
-    logical(lgt) :: ltmp
-    integer(i4b) :: ios,idata
-    
-    ! open the file
-    inquire(file= trim(data_file), exist = ltmp)
-    if(.not.ltmp) stop ' data file does not exist'
-    open(io,file=trim(data_file),action='read',iostat=ios)
-    if(ios /= 0) stop 'problem opening data file'
-
-    ! work out how many data points there are
-    ndata = 0
-    do 
-       read(io,*,iostat = ios) 
-       if(ios < 0) exit
-       ndata = ndata+1
-    end do
-
-    ! read in the data
-    allocate(lata(ndata),lona(ndata),funa(ndata), & 
-         sigmaa(ndata),lambdaa(ndata))
-  
-  
-    rewind(io)
-    do idata = 1,ndata
-          read(io,*) lata(idata),lona(idata),funa(idata), & 
-               sigmaa(idata),lambdaa(idata)
-    end do
-    
-    ! convert lambda into equivalent angle in radians
-    lambdaa = (lambdaa/6371.0_dp)
-
-    close(io)
-
-    return
-  end subroutine read_data_SH_av
 
 
 
