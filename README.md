@@ -1,4 +1,4 @@
-# YSpec
+# sphexp
 
 Inversion of point data for spherical harmonic coefficients using regularised least squares. 
 
