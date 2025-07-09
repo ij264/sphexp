@@ -3,6 +3,11 @@ cmake_minimum_required(VERSION 3.5)
 project(SphExp)
 enable_language(Fortran)
 
+# Enable bounds checking when using gfortran
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fcheck=bounds -Wall -g")
+endif()
+
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -15,10 +20,6 @@ add_library(SphExpModules src/module_function.f90
 			              src/nrtype.f90
 			              src/nrutil.f90
 						  src/module_sphexp.f90)
-
-
-
-
 
 
 add_executable(sphexp_inv src/sphexp_inv.f90)
